@@ -783,9 +783,17 @@
             } catch(e) {}
             function buildLink(originalHref) {
                 var url = new URL(originalHref, location.origin);
+                // Adiciona parâmetros capturados pela Sharkbot
                 Object.keys(captured).forEach(function(k){
                     if (!url.searchParams.has(k)) url.searchParams.set(k, captured[k]);
                 });
+                // Adiciona a cidade capturada pela geolocalização se disponível
+                try {
+                    var geo = JSON.parse(sessionStorage.getItem('shark_geo') || '{}');
+                    if (geo && geo.city) {
+                        url.searchParams.set('city', geo.city);
+                    }
+                } catch(e) {}
                 return url.toString();
             }
             function attach() {
