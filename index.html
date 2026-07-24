@@ -617,7 +617,7 @@
             </div>
 
             <!-- CTA Principal -->
-            <a href="https://t.me/lurodriguesusa_bot" class="cta cta-dark button" id="cta-main" target="_blank" rel="noopener noreferrer">
+            <a href="#" class="cta cta-dark button" id="cta-main" target="_blank" rel="noopener noreferrer">
                 Iniciar conversa com Luisa Rodrigues →
             </a>
             <p class="cta-disclaimer">🔒 Conversa privada e segura · Apenas maiores de 18 anos</p>
@@ -634,7 +634,7 @@
 
     <!-- ── Sticky CTA Bottom ──────────────────────────────────────────── -->
     <div class="sticky-cta-wrapper">
-        <a href="https://t.me/lurodriguesusa_bot" class="cta cta-pink button" id="cta-pink" target="_blank" rel="noopener noreferrer">
+        <a href="#" class="cta cta-pink button" id="cta-pink" target="_blank" rel="noopener noreferrer">
             <span class="pink-dot"></span>
             Falar com Luisa Rodrigues agora
         </a>
@@ -642,119 +642,188 @@
     </div>
 
     <script>
-        // ─── SharkBot: Captura UTMs, click_id e parâmetros de rastreamento ─────────────
-        (function() {
+        // ════════════════════════════════════════════════════════════════════════════
+        // ─── CONFIGURAÇÃO ────────────────────────────────────────────────────────
+        // ════════════════════════════════════════════════════════════════════════════
+
+        // Nome de usuário do seu bot no Telegram (sem o @)
+        var BOT_USERNAME = "lurodriguesusa_bot";
+
+        // ════════════════════════════════════════════════════════════════════════════
+        // ─── SharkBot: Captura do click_id e UTMs da URL ─────────────────────────
+        // ════════════════════════════════════════════════════════════════════════════
+        var _sharkParams = (function() {
             var u = new URLSearchParams(window.location.search);
-            var KEYS = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term','utm_id','fbclid','ttclid','click_id','_fbp','gclid','xcod','sck','cv','salesCode'];
+            var KEYS = ['click_id','utm_source','utm_medium','utm_campaign','utm_content',
+                        'utm_term','utm_id','fbclid','ttclid','_fbp','gclid','xcod','sck',
+                        'cv','salesCode'];
             var captured = {};
-            KEYS.forEach(function(k){ var v = u.get(k); if (v) captured[k] = v; });
+            KEYS.forEach(function(k) {
+                var v = u.get(k);
+                if (v) captured[k] = v;
+            });
+            // Persiste na sessão para sobreviver a recarregamentos
             try {
                 var saved = JSON.parse(sessionStorage.getItem('shark_utms') || '{}');
-                Object.keys(captured).forEach(function(k){ saved[k] = captured[k]; });
+                // Parâmetros da URL têm prioridade sobre os salvos
+                Object.assign(saved, captured);
                 sessionStorage.setItem('shark_utms', JSON.stringify(saved));
-                captured = saved;
-            } catch(e) {}
-            
-            window.buildSharkLink = function(originalHref) {
-                try {
-                    var url = new URL(originalHref, location.origin);
-                    Object.keys(captured).forEach(function(k){
-                        if (!url.searchParams.has(k)) url.searchParams.set(k, captured[k]);
-                    });
-                    return url.toString();
-                } catch(err) {
-                    return originalHref;
-                }
-            };
+                return saved;
+            } catch(e) {
+                return captured;
+            }
         })();
 
-        // ─── Geolocalização do lead via IP ──────────────────────────────────────────────
+        // ─── Geolocalização do lead via IP ──────────────────────────────────────
         (function() {
             try {
                 fetch('https://ipapi.co/json/')
-                    .then(function(r){ return r.json(); })
+                    .then(function(r) { return r.json(); })
                     .then(function(data) {
                         if (data && data.city) {
                             sessionStorage.setItem('shark_geo', JSON.stringify({
                                 city: data.city,
                                 region: data.region,
-                                country: data.country_name,
-                                lat: data.latitude,
-                                lon: data.longitude
+                                country: data.country_name
                             }));
                             var locEl = document.getElementById('user-location');
                             if (locEl) locEl.textContent = '📍 a 2 km de você · ' + data.city;
                         }
-                    }).catch(function(){});
+                    }).catch(function() {});
             } catch(e) {}
         })();
 
-        // ─── Config ────────────────────────────────────────────────────────────────────
-        const CTA_LINK = "https://t.me/lurodriguesusa_bot"; // ← SEU LINK DE AFILIADO
-        const CHAT_MESSAGES = [
+        // ════════════════════════════════════════════════════════════════════════════
+        // ─── Função central: monta o link do Telegram com o click_id no ?start= ─
+        // ════════════════════════════════════════════════════════════════════════════
+        //
+        // COMO FUNCIONA:
+        //   O Telegram só aceita rastreamento pelo parâmetro ?start=PAYLOAD
+        //   O payload chega ao bot via message.text == "/start PAYLOAD"
+        //
+        //   Estratégia: ?start=click_id__utm_source__utm_campaign
+        //   O SharkBot lê o texto após /start e extrai os valores.
+        //
+        //   Limite do Telegram: o payload do ?start= aceita até 64 caracteres
+        //   e apenas letras, números, _ e -.
+        //
+        function buildTelegramLink() {
+            var clickId  = _sharkParams['click_id']       || '';
+            var src      = _sharkParams['utm_source']     || '';
+            var campaign = _sharkParams['utm_campaign']   || '';
+            var fbclid   = _sharkParams['fbclid']         || '';
+            var ttclid   = _sharkParams['ttclid']         || '';
+
+            // Prioridade: click_id > fbclid > ttclid > utm_source
+            var primaryId = clickId || fbclid || ttclid || src || 'organic';
+
+            // Sanitiza: remove caracteres inválidos para o parâmetro start do Telegram
+            function sanitize(s) {
+                return s.replace(/[^A-Za-z0-9_\-]/g, '_').substring(0, 60);
+            }
+
+            var payload = sanitize(primaryId);
+
+            // Se tiver campanha, concatena separado por hífen (ex: "CLICKID-campanha")
+            if (campaign) {
+                var part = sanitize(campaign);
+                // Garante que o total não ultrapasse 64 chars
+                if ((payload + '-' + part).length <= 64) {
+                    payload = payload + '-' + part;
+                }
+            }
+
+            var link = 'https://t.me/' + BOT_USERNAME;
+            if (payload) {
+                link += '?start=' + encodeURIComponent(payload);
+            }
+            return link;
+        }
+
+        // ════════════════════════════════════════════════════════════════════════════
+        // ─── Aplica o link correto a todos os botões CTA ─────────────────────────
+        // ════════════════════════════════════════════════════════════════════════════
+        function applyCtaLinks() {
+            var finalLink = buildTelegramLink();
+            document.querySelectorAll('a.button, a.cta').forEach(function(btn) {
+                btn.href = finalLink;
+            });
+        }
+
+        // Aplica imediatamente (DOM já carregado neste ponto do script)
+        applyCtaLinks();
+
+        // ════════════════════════════════════════════════════════════════════════════
+        // ─── Config de conteúdo ──────────────────────────────────────────────────
+        // ════════════════════════════════════════════════════════════════════════════
+        var CHAT_MESSAGES = [
             "oi amor 🙈 tá acordado?",
             "tô sozinha em casa hoje...",
             "quero te contar uma coisa 🤫"
         ];
 
-        const ACTIVITY_NAMES = [
-            { initial: "L", color: "#4299e1", name: "Lucas", action: "acabou de entrar no chat" },
-            { initial: "R", color: "#48bb78", name: "Rafael", action: "respondeu uma mensagem" },
-            { initial: "P", color: "#9f7aea", name: "Pedro", action: "começou a conversar com Luisa Rodrigues" },
-            { initial: "A", color: "#ed8936", name: "André", action: "entrou no chat" },
-            { initial: "M", color: "#f56565", name: "Marcos", action: "enviou uma mensagem" },
+        var ACTIVITY_NAMES = [
+            { initial: "L", color: "#4299e1", name: "Lucas",   action: "acabou de entrar no chat" },
+            { initial: "R", color: "#48bb78", name: "Rafael",  action: "respondeu uma mensagem" },
+            { initial: "P", color: "#9f7aea", name: "Pedro",   action: "começou a conversar com Luisa Rodrigues" },
+            { initial: "A", color: "#ed8936", name: "André",   action: "entrou no chat" },
+            { initial: "M", color: "#f56565", name: "Marcos",  action: "enviou uma mensagem" },
             { initial: "G", color: "#38b2ac", name: "Gabriel", action: "está online agora" }
         ];
 
-        // ─── State ─────────────────────────────────────────────────────────────────────
-        let onlineCount = 247;
-        let visibleMessages = 0;
-        let isTyping = false;
-        let currentActivity = ACTIVITY_NAMES.slice(0, 4);
-        let activityTimes = [0, 1, 2, 3];
+        // ─── State ──────────────────────────────────────────────────────────────
+        var onlineCount     = 247;
+        var visibleMessages = 0;
+        var currentActivity = ACTIVITY_NAMES.slice(0, 4);
+        var activityTimes   = [0, 1, 2, 3];
 
-        // ─── Simula variação do contador online ──────────────────────────────────────
+        // ─── Simula variação do contador online ─────────────────────────────────
         setInterval(function() {
             var delta = Math.floor(Math.random() * 5) - 2;
             onlineCount = Math.max(230, Math.min(280, onlineCount + delta));
             document.getElementById('header-online-count').textContent = onlineCount + ' online';
-            document.getElementById('viewer-count').textContent = onlineCount;
+            document.getElementById('viewer-count').textContent        = onlineCount;
             document.getElementById('footer-online-count').textContent = onlineCount;
         }, 3000);
 
-        // ─── Animação de mensagens do chat ──────────────────────────────────────────
+        // ─── Animação de mensagens do chat ──────────────────────────────────────
         function showNextMessage(idx) {
             if (idx >= CHAT_MESSAGES.length) return;
-            isTyping = true;
             document.getElementById('chat-footer').style.display = 'flex';
-            
+
             setTimeout(function() {
-                isTyping = false;
                 document.getElementById('chat-footer').style.display = 'none';
-                
+
                 var msgDiv = document.createElement('div');
                 msgDiv.className = 'chat-bubble-row';
-                msgDiv.innerHTML = '<img src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663851188398/NZXzXUJDkTuKaJMK.jpg" alt="" class="chat-avatar"><div class="chat-bubble">' + CHAT_MESSAGES[idx] + '</div>';
+                msgDiv.innerHTML =
+                    '<img src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663851188398/NZXzXUJDkTuKaJMK.jpg" alt="" class="chat-avatar">' +
+                    '<div class="chat-bubble">' + CHAT_MESSAGES[idx] + '</div>';
                 document.getElementById('chat-messages').appendChild(msgDiv);
-                
+
                 visibleMessages = idx + 1;
                 setTimeout(function() { showNextMessage(idx + 1); }, 1800);
             }, 1200);
         }
 
-        // Inicia animação de chat após 800ms
         setTimeout(function() { showNextMessage(0); }, 800);
 
-        // ─── Simula atividade recente rotativa ──────────────────────────────────────
+        // ─── Simula atividade recente rotativa ──────────────────────────────────
         function renderActivity() {
             var html = '';
             for (var i = 0; i < currentActivity.length; i++) {
-                var item = currentActivity[i];
-                var timeText = activityTimes[i] === 0 ? 'agora' : (activityTimes[i] === 1 ? '1 min' : activityTimes[i] + ' min');
-                html += '<div class="activity-item">' +
-                    '<div class="activity-avatar" style="background-color:' + item.color + '">' + item.initial + '</div>' +
-                    '<div class="activity-text"><span class="activity-name">' + item.name + '</span><span class="activity-action"> ' + item.action + '</span></div>' +
-                    '<span class="activity-time">' + timeText + '</span>' +
+                var item     = currentActivity[i];
+                var timeText = activityTimes[i] === 0 ? 'agora'
+                             : activityTimes[i] === 1 ? '1 min'
+                             : activityTimes[i] + ' min';
+                html +=
+                    '<div class="activity-item">' +
+                        '<div class="activity-avatar" style="background-color:' + item.color + '">' + item.initial + '</div>' +
+                        '<div class="activity-text">' +
+                            '<span class="activity-name">' + item.name + '</span>' +
+                            '<span class="activity-action"> ' + item.action + '</span>' +
+                        '</div>' +
+                        '<span class="activity-time">' + timeText + '</span>' +
                     '</div>';
             }
             document.getElementById('activity-list').innerHTML = html;
@@ -768,60 +837,6 @@
             activityTimes = activityTimes.map(function(t) { return t + 1; });
             renderActivity();
         }, 8000);
-
-        // ─── SharkBot: Adiciona parâmetros aos CTAs ao clicar ─────────────────────────
-        (function() {
-            var u = new URLSearchParams(window.location.search);
-            var KEYS = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term','utm_id','fbclid','ttclid','click_id','_fbp','gclid','xcod','sck','cv','salesCode'];
-            var captured = {};
-            KEYS.forEach(function(k){ var v = u.get(k); if (v) captured[k] = v; });
-            try {
-                var saved = JSON.parse(sessionStorage.getItem('shark_utms') || '{}');
-                Object.keys(captured).forEach(function(k){ saved[k] = captured[k]; });
-                sessionStorage.setItem('shark_utms', JSON.stringify(saved));
-                captured = saved;
-            } catch(e) {}
-            function buildLink(originalHref) {
-                var url = new URL(originalHref, location.origin);
-                // Adiciona parâmetros capturados pela Sharkbot
-                Object.keys(captured).forEach(function(k){
-                    if (!url.searchParams.has(k)) url.searchParams.set(k, captured[k]);
-                });
-                // Adiciona a cidade capturada pela geolocalização se disponível
-                try {
-                    var geo = JSON.parse(sessionStorage.getItem('shark_geo') || '{}');
-                    if (geo && geo.city) {
-                        url.searchParams.set('city', geo.city);
-                    }
-                } catch(e) {}
-                return url.toString();
-            }
-            function attach() {
-                document.querySelectorAll('a.button, a.cta, a[href*="/l/"], a[href*="/c/"], a[href*="/b/"]').forEach(function(btn){
-                    btn.addEventListener('click', function(e){
-                        try { btn.href = buildLink(btn.href); } catch(err) {}
-                    }, { once: false, capture: true });
-                });
-            }
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', attach);
-            } else {
-                attach();
-            }
-        })();
-
-        // Ajuste para os botões principais usarem a lógica do Sharkbot
-        document.querySelectorAll('a.button, a.cta').forEach(function(btn){
-            btn.addEventListener('click', function(e){
-                e.preventDefault(); // Previne o comportamento padrão do link
-                try {
-                    var finalUrl = window.buildSharkLink(CTA_LINK);
-                    window.open(finalUrl, '_blank'); // Abre o link em uma nova aba
-                } catch(err) {
-                    window.open(CTA_LINK, '_blank'); // Fallback caso haja erro no SharkBot
-                }
-            });
-        });
     </script>
 </body>
 </html>
