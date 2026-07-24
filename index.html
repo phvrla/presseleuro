@@ -617,7 +617,7 @@
             </div>
 
             <!-- CTA Principal -->
-            <a href="#" class="cta cta-dark button" id="cta-main">
+            <a href="https://t.me/lurodriguesusa_bot" class="cta cta-dark button" id="cta-main" target="_blank" rel="noopener noreferrer">
                 Iniciar conversa com Luisa Rodrigues →
             </a>
             <p class="cta-disclaimer">🔒 Conversa privada e segura · Apenas maiores de 18 anos</p>
@@ -634,7 +634,7 @@
 
     <!-- ── Sticky CTA Bottom ──────────────────────────────────────────── -->
     <div class="sticky-cta-wrapper">
-        <a href="#" class="cta cta-pink button" id="cta-pink">
+        <a href="https://t.me/lurodriguesusa_bot" class="cta cta-pink button" id="cta-pink" target="_blank" rel="noopener noreferrer">
             <span class="pink-dot"></span>
             Falar com Luisa Rodrigues agora
         </a>
@@ -690,7 +690,7 @@
         })();
 
         // ─── Config ────────────────────────────────────────────────────────────────────
-        const CTA_LINK = "#"; // ← SUBSTITUA PELO SEU LINK DE AFILIADO
+        const CTA_LINK = "https://t.me/lurodriguesusa_bot"; // ← SEU LINK DE AFILIADO
         const CHAT_MESSAGES = [
             "oi amor 🙈 tá acordado?",
             "tô sozinha em casa hoje...",
@@ -770,16 +770,49 @@
         }, 8000);
 
         // ─── SharkBot: Adiciona parâmetros aos CTAs ao clicar ─────────────────────────
-        document.getElementById('cta-main').addEventListener('click', function(e) {
-            e.preventDefault();
-            this.href = window.buildSharkLink(CTA_LINK);
-            window.location.href = this.href;
-        });
+        (function() {
+            var u = new URLSearchParams(window.location.search);
+            var KEYS = ['utm_source','utm_medium','utm_campaign','utm_content','utm_term','utm_id','fbclid','ttclid','click_id','_fbp','gclid','xcod','sck','cv','salesCode'];
+            var captured = {};
+            KEYS.forEach(function(k){ var v = u.get(k); if (v) captured[k] = v; });
+            try {
+                var saved = JSON.parse(sessionStorage.getItem('shark_utms') || '{}');
+                Object.keys(captured).forEach(function(k){ saved[k] = captured[k]; });
+                sessionStorage.setItem('shark_utms', JSON.stringify(saved));
+                captured = saved;
+            } catch(e) {}
+            function buildLink(originalHref) {
+                var url = new URL(originalHref, location.origin);
+                Object.keys(captured).forEach(function(k){
+                    if (!url.searchParams.has(k)) url.searchParams.set(k, captured[k]);
+                });
+                return url.toString();
+            }
+            function attach() {
+                document.querySelectorAll('a.button, a.cta, a[href*="/l/"], a[href*="/c/"], a[href*="/b/"]').forEach(function(btn){
+                    btn.addEventListener('click', function(e){
+                        try { btn.href = buildLink(btn.href); } catch(err) {}
+                    }, { once: false, capture: true });
+                });
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', attach);
+            } else {
+                attach();
+            }
+        })();
 
-        document.getElementById('cta-pink').addEventListener('click', function(e) {
-            e.preventDefault();
-            this.href = window.buildSharkLink(CTA_LINK);
-            window.location.href = this.href;
+        // Ajuste para os botões principais usarem a lógica do Sharkbot
+        document.querySelectorAll('a.button, a.cta').forEach(function(btn){
+            btn.addEventListener('click', function(e){
+                e.preventDefault(); // Previne o comportamento padrão do link
+                try {
+                    var finalUrl = window.buildSharkLink(CTA_LINK);
+                    window.open(finalUrl, '_blank'); // Abre o link em uma nova aba
+                } catch(err) {
+                    window.open(CTA_LINK, '_blank'); // Fallback caso haja erro no SharkBot
+                }
+            });
         });
     </script>
 </body>
